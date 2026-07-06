@@ -3281,7 +3281,7 @@ payFastLogoImageUrl: brandPayFastLogo,
  onChange={(e) => setSiteTitle(e.target.value)}
  placeholder="e.g. Fruitopia — Fresh Organic Smoothies & Juices"
  className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none transition-all"
- /> <p className="text-[9px] text-slate-400 font-medium mt-1"> This updates the <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-600">&lt;title&gt;</code> tag instantly. Keep it under 60 characters for best SEO.
+ /> <p className="text-[9px] text-slate-400 font-medium mt-1"> Updates your browser tab title instantly. Keep it under 60 characters for the best SEO.
  </p> </div> <div className="grid grid-cols-1 md:grid-cols-2 gap-4"> <div> <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Hero Badge Text</label> <input
  type="text"
  value={heroBadgeText}

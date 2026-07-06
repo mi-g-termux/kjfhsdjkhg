@@ -1943,9 +1943,31 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
           console.warn('[ensureUserAfterCheckout] profile backfill failed:', e);
         }
       }
-      setCurrentUserSession(patched.email);
-      setUserProfileState(patched);
-      setCurrentUserEmail(patched.email);
+      // ── SECURITY FIX: never silently log a guest into someone else's account ──
+      // A guest checkout only proves the shopper TYPED an email address — not
+      // that they actually OWN it. If that email already belongs to a real,
+      // password-protected account, starting a session here would hand a total
+      // stranger full access to the true owner's profile, saved address, phone
+      // and complete order history. That is the "it automatically logged in to
+      // his account" behaviour and it is dangerous.
+      //
+      // So we ONLY start a session when the shopper has genuinely proven they
+      // own this email:
+      //   1) they are already logged in as this exact email, OR
+      //   2) they verified this email (OTP / verification link) during checkout, OR
+      //   3) the account has no password yet (a prior guest-only account — it
+      //      holds no credentials to protect, so keeping the "track your order"
+      //      convenience for repeat guest buyers is safe).
+      // In every other case we STILL attach the order to the account (so the
+      // real owner sees it the moment they log in) but we leave the session
+      // completely untouched — the stranger stays a guest.
+      const alreadyThisUser = (currentUserEmail || '').trim().toLowerCase() === key;
+      const provedOwnership = alreadyThisUser || isEmailVerified(key) || !existing.passwordHash;
+      if (provedOwnership) {
+        setCurrentUserSession(patched.email);
+        setUserProfileState(patched);
+        setCurrentUserEmail(patched.email);
+      }
       const lastSetupSentAt = patched.passwordSetupSentAt ? Date.parse(patched.passwordSetupSentAt) : 0;
       const shouldSendSetup = !patched.passwordHash && (!lastSetupSentAt || Date.now() - lastSetupSentAt > 15 * 60_000);
       const passwordSetupSent = shouldSendSetup ? await sendPasswordSetupEmail(patched) : false;
