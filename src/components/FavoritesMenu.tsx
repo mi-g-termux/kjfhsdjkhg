@@ -11,6 +11,31 @@ import { useToast } from './Toast';
 import { getVariantsForProducts } from '../db';
 import { flyToCart } from '../lib/flyToCart';
 
+// ── Bulletproof text clamps ───────────────────────────────────────────────────
+// These are applied as INLINE styles (not Tailwind classes) on purpose. Tailwind
+// utility classes like line-clamp-2 can silently fail to render if the build
+// step doesn't scan/generate them, which is exactly what made long product
+// titles overflow and collide with the text below. Inline styles are baked into
+// the element directly, so the 2-line clamp ALWAYS works in every build/browser.
+const TITLE_CLAMP_STYLE = {
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+  lineHeight: '1.3',
+  height: '2.6em',
+  overflowWrap: 'anywhere',
+  wordBreak: 'break-word',
+} as React.CSSProperties;
+const DESC_CLAMP_STYLE = {
+  display: '-webkit-box',
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: 'vertical',
+  overflow: 'hidden',
+  lineHeight: '1.35',
+  height: '2.1em',
+} as React.CSSProperties;
+
 // ── localStorage helpers ──────────────────────────────────────────────────────
 const RV_KEY = 'qf_recently_viewed';
 const WL_KEY = 'qf_wishlist';
@@ -330,11 +355,12 @@ export const FavoritesMenu = ({
                   {/* Title and Description */}
                   <div className="flex-1 mb-4">
                     <h3
-                      className="text-sm font-bold font-sans text-slate-800 line-clamp-2 h-[2.6rem] leading-[1.3] uppercase cursor-pointer hover:text-emerald-700 transition-colors break-words [overflow-wrap:anywhere]"
+                      className="text-sm font-bold font-sans text-slate-800 uppercase cursor-pointer hover:text-emerald-700 transition-colors"
+                      style={TITLE_CLAMP_STYLE}
                       onClick={() => navigateToProduct(prod)}
                       title={prod.name}
                     >{prod.name}</h3>
-                    <p className="text-xs text-slate-500 font-normal line-clamp-2 mt-1.5 leading-snug h-[2rem]">
+                    <p className="text-xs text-slate-500 font-normal mt-1.5" style={DESC_CLAMP_STYLE}>
                       {prod.description}
                     </p>
                     
