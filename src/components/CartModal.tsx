@@ -2053,7 +2053,7 @@ export const CartModal = ({ isOpen, onClose, emailVerified = true }: CartModalPr
         return;
       }
 
-      // ─������� Razorpay ─────────────────────────────────────────────────────────
+      // ─����������� Razorpay ─────────────────────────────────────────────────────────
       if (methodLabel.startsWith('Razorpay')) {
         setAutoStep(3);
         const rzpRes = await fetch('/api/razorpay/create-order', {
@@ -2779,9 +2779,15 @@ export const CartModal = ({ isOpen, onClose, emailVerified = true }: CartModalPr
                                 alt={g.label}
                                 className="h-5 w-auto object-contain"
                                 loading="lazy"
-                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                  const lbl = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                  if (lbl) lbl.style.display = 'block';
+                                }}
                               />
-                              <span className="text-center text-[9px] font-bold uppercase leading-tight text-slate-600">{g.label}</span>
+                              {/* Logo-only by default (matches the main checkout chooser). The
+                                  text label is a fallback that only appears if the logo image fails to load. */}
+                              <span className="text-center text-[9px] font-bold uppercase leading-tight text-slate-600" hidden>{g.label}</span>
                             </button>
                           ))}
                         </div>

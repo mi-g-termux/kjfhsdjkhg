@@ -716,11 +716,28 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     // Supabase ready-state changes
+    // BUG FIX (fresh-visitor double-refresh): On a brand-new visitor, the
+    // storefront mounts and detects the engine BEFORE Supabase finishes its
+    // async boot (fetch /supabase-config.json -> createClient). At that instant
+    // getIsSupabaseConfigured() is still false, so getActiveEngine() returns
+    // 'local' and loadData() renders an EMPTY catalog with no realtime listeners.
+    // When Supabase then becomes ready, the old code only reloaded if the engine
+    // was ALREADY 'supabase' -> so a first-time visitor was stuck on an empty
+    // page until they manually refreshed. We now mirror the Firebase branch and
+    // auto-upgrade local -> supabase the moment Supabase is live.
     const unsubSb = onSupabaseReadyChange((ready) => {
-      if (ready && databaseEngineRef.current === 'supabase') {
-        console.log('[AppContext] Supabase is now live — reloading data...');
-        loadDataRef.current();
-        mountListenersForEngineRef.current('supabase');
+      if (ready) {
+        const currentEngine = databaseEngineRef.current;
+        if (currentEngine === 'local' && getActiveEngine() === 'supabase') {
+          console.log('[AppContext] Supabase detected — auto-upgrading from local to supabase engine.');
+          setDatabaseEngine('supabase');
+          loadDataRef.current();
+          mountListenersForEngineRef.current('supabase');
+        } else if (currentEngine === 'supabase') {
+          console.log('[AppContext] Supabase is now live — reloading data...');
+          loadDataRef.current();
+          mountListenersForEngineRef.current('supabase');
+        }
       }
     });
 

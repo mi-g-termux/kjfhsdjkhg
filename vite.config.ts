@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   // Load ALL .env vars (passing '' as prefix loads everything, not just VITE_)
   const env = loadEnv(mode, process.cwd(), '');
 
@@ -37,8 +37,14 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
-        // jspdf is blocked in this environment; stub it out for dev preview
-        'jspdf': path.resolve(__dirname, 'src/lib/jspdf-stub.ts'),
+        // jspdf only needs the lightweight stub during LOCAL DEV PREVIEW
+        // (the package was blocked in the authoring sandbox). Production
+        // builds (`vite build` -> command === 'build', used by build:vercel /
+        // build:render / build:cpanel) MUST use the real jspdf, otherwise every
+        // invoice PDF is generated empty (0 bytes -> "Failed to load PDF").
+        ...(command === 'serve'
+          ? { 'jspdf': path.resolve(__dirname, 'src/lib/jspdf-stub.ts') }
+          : {}),
       },
     },
     build: {
