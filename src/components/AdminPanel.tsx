@@ -396,7 +396,7 @@ export const AdminPanel: React.FC = () => {
  { code:'INR', symbol:'₹', name:'Indian Rupee', position:'before' },
  { code:'AED', symbol:'د.إ', name:'UAE Dirham', position:'after' },
  { code:'SAR', symbol:'﷼', name:'Saudi Riyal', position:'before' },
- { code:'PKR', symbol:'��', name:'Pakistani Rupee', position:'before' },
+ { code:'PKR', symbol:'₨', name:'Pakistani Rupee', position:'before' },
  { code:'MYR', symbol:'RM', name:'Malaysian Ringgit', position:'before' },
  { code:'CAD', symbol:'CA$', name:'Canadian Dollar', position:'before' },
  { code:'AUD', symbol:'A$', name:'Australian Dollar', position:'before' },
@@ -3237,7 +3237,7 @@ payFastLogoImageUrl: brandPayFastLogo,
  onChange={(e) => setBrandName(e.target.value)}
  className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none transition-all"
  /> </div> <div className="md:col-span-2"> <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5"> Site Logo Image <span className="normal-case text-emerald-600 font-semibold">(appears in Navbar, Footer, Hero, Cart & Invoices)</span> </label> {/* Recommended size info box */}
- <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[10px] text-blue-800 leading-relaxed mb-3"> <p className="font-bold text-blue-900 uppercase mb-1"> Recommended Logo Specifications</p> <div className="grid grid-cols-2 gap-x-4 gap-y-0.5"> <p>• Ideal size: <span className="font-bold">200 × 200 px</span> (square)</p> <p>• Aspect ratio: <span className="font-bold">1:1 square</span></p> <p>��� Min size: <span className="font-bold">100 × 100 px</span></p> <p>• Max file size: <span className="font-bold">2 MB</span></p> <p>• Best format: <span className="font-bold">SVG or PNG</span></p> <p>• Background: <span className="font-bold">Transparent PNG preferred</span></p> </div> <p className="mt-1.5 text-blue-700"> SVG is best — scales perfectly at any size. Transparent PNG also works great. Avoid JPG for logos (no transparency).</p> </div> <div className="flex flex-col sm:flex-row gap-3 items-start"> {/* Upload button */}
+ <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[10px] text-blue-800 leading-relaxed mb-3"> <p className="font-bold text-blue-900 uppercase mb-1"> Recommended Logo Specifications</p> <div className="grid grid-cols-2 gap-x-4 gap-y-0.5"> <p>• Ideal size: <span className="font-bold">200 × 200 px</span> (square)</p> <p>• Aspect ratio: <span className="font-bold">1:1 square</span></p> <p>• Min size: <span className="font-bold">100 × 100 px</span></p> <p>• Max file size: <span className="font-bold">2 MB</span></p> <p>• Best format: <span className="font-bold">SVG or PNG</span></p> <p>• Background: <span className="font-bold">Transparent PNG preferred</span></p> </div> <p className="mt-1.5 text-blue-700"> SVG is best — scales perfectly at any size. Transparent PNG also works great. Avoid JPG for logos (no transparency).</p> </div> <div className="flex flex-col sm:flex-row gap-3 items-start"> {/* Upload button */}
  <div className="flex-1 space-y-2"> <label className="flex items-center gap-2 w-fit px-3 py-2 bg-white border border-dashed border-emerald-400 hover:bg-emerald-50 rounded-xl cursor-pointer transition-colors group"> <span className="text-emerald-600 text-lg"></span> <span className="text-xs font-semibold text-emerald-700 group-hover:text-emerald-800">Upload Logo File</span> <input
  type="file"
  accept="image/jpeg,image/png,image/webp,image/svg+xml,image/gif"
@@ -4713,7 +4713,7 @@ payFastLogoImageUrl: brandPayFastLogo,
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Backend management card (Admin Panel → Backend tab)
-// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────����─────────────────────────────────────────────────────────
 type PingStatus = 'idle' | 'checking' | 'ok' | 'error';
 
 function BackendSection() {
