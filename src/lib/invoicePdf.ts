@@ -215,31 +215,79 @@ export function buildInvoicePdfBase64(options: BuildInvoiceOptions): string {
   writeRow('GRAND TOTAL', fmt(order.total), { bold: true });
   doc.setLineWidth(0.2);
 
-  // Delivery fee prepayment breakdown — shown when COD + advance payment was collected
-  if (order.paidAmount !== undefined && order.outstandingAmount !== undefined) {
-    y += 8;
+  // ── PAYMENT SUMMARY ─────────────────────────────────────────────────────────
+  // Always show the payment METHOD, a clear PAID / PARTIALLY PAID / UNPAID
+  // status, and Amount Paid vs Amount Due, so anyone reading the invoice knows
+  // instantly whether (and how) the order was paid. Handles fully-prepaid
+  // orders, partial-COD (advance paid online), and plain cash-on-delivery.
+  {
+    const grand = Number(order.total) || 0;
+    const hasPartial =
+      order.paidAmount !== undefined && order.outstandingAmount !== undefined;
+    const isFullyPaid = order.paymentStatus === 'Paid';
+    const paid = hasPartial
+      ? Number(order.paidAmount) || 0
+      : isFullyPaid
+        ? grand
+        : 0;
+    const due = hasPartial
+      ? Number(order.outstandingAmount) || 0
+      : Math.max(0, grand - paid);
+
+    const statusLabel =
+      due <= 0 && paid > 0
+        ? 'PAID'
+        : paid > 0
+          ? 'PARTIALLY PAID'
+          : 'UNPAID (Cash on Delivery)';
+    const statusColor: [number, number, number] =
+      due <= 0 && paid > 0 ? [16, 185, 129] : paid > 0 ? [217, 119, 6] : [220, 38, 38];
+
+    y += 10;
     doc.setDrawColor(16, 185, 129);
     doc.setLineWidth(0.8);
     doc.line(totalsX, y, pageW - margin - 10, y);
-    y += 14;
+    y += 16;
     doc.setLineWidth(0.2);
-    // Already Paid row (green)
+
+    // Payment method
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.setTextColor(16, 185, 129);
-    doc.text('Already Paid (Delivery Fee)', totalsX, y);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
-    doc.text(fmt(order.paidAmount), pageW - margin - 10, y, { align: 'right' });
+    doc.setTextColor(100, 116, 139);
+    doc.text('Payment Method', totalsX, y);
+    doc.setTextColor(30, 41, 59);
+    const methodLines = doc.splitTextToSize(order.paymentMethod || '-', 150);
+    doc.text(methodLines[0] || '-', pageW - margin - 10, y, { align: 'right' });
     y += 18;
-    // Remaining Due row (red)
+
+    // Payment status
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(220, 38, 38);
-    doc.text('Remaining Due on Delivery', totalsX, y);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Payment Status', totalsX, y);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(220, 38, 38);
-    doc.text(fmt(order.outstandingAmount), pageW - margin - 10, y, { align: 'right' });
+    doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
+    doc.text(statusLabel, pageW - margin - 10, y, { align: 'right' });
+    y += 18;
+
+    // Amount paid (green)
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(16, 185, 129);
+    doc.text('Amount Paid', totalsX, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(16, 185, 129);
+    doc.text(fmt(paid), pageW - margin - 10, y, { align: 'right' });
+    y += 18;
+
+    // Amount due (red when > 0, otherwise neutral/green)
+    const dueR = due > 0 ? 220 : 16;
+    const dueG = due > 0 ? 38 : 185;
+    const dueB = due > 0 ? 38 : 129;
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(dueR, dueG, dueB);
+    doc.text(due > 0 ? 'Amount Due on Delivery' : 'Amount Due', totalsX, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(dueR, dueG, dueB);
+    doc.text(fmt(due), pageW - margin - 10, y, { align: 'right' });
     y += 18;
     doc.setLineWidth(0.2);
   }

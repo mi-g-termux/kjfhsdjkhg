@@ -41,7 +41,8 @@ import {
  Palette,
  Server, Truck, Zap, Globe, MapPin, Info, Send, AlertTriangle, ToggleLeft, ToggleRight, ChevronRight } from'lucide-react';
 import { Product, Coupon, Category, DeliveryZone, ProductImage, ProductVariant, ProductVariantGroup } from'../types';
-import { getActiveEngine, hashPassword, dbService, saveProductImages, getProductImages, saveProductVariantGroups, getProductVariantGroups, saveProductVariants, getProductVariants } from '../db';
+import { getActiveEngine, hashPassword, dbService, emailToUserId, saveProductImages, getProductImages, saveProductVariantGroups, getProductVariantGroups, saveProductVariants, getProductVariants } from '../db';
+import type { Order, OrderStatus } from '../types';
 import { buildInvoicePdfBase64 } from '../lib/invoicePdf';
 
 
@@ -96,6 +97,104 @@ export const AdminPanel: React.FC = () => {
  } = useApp();
 
  const toast = useToast();
+
+ // ── MANUAL INVOICE / OFFLINE ORDER (WhatsApp / Messenger / phone) ──────────────
+ // Lets the admin turn an order received off-site into a real order record and a
+ // downloadable invoice PDF, capturing how much was paid vs. how much is due.
+ const [showManualInvoice, setShowManualInvoice] = useState(false);
+ const [miSaving, setMiSaving] = useState(false);
+ const [miName, setMiName] = useState('');
+ const [miPhone, setMiPhone] = useState('');
+ const [miEmail, setMiEmail] = useState('');
+ const [miAddress, setMiAddress] = useState('');
+ const [miCity, setMiCity] = useState('');
+ const [miDeliveryFee, setMiDeliveryFee] = useState('0');
+ const [miPaidAmount, setMiPaidAmount] = useState('0');
+ const [miPaymentMethod, setMiPaymentMethod] = useState('Cash on Delivery');
+ const [miNote, setMiNote] = useState('');
+ const [miItems, setMiItems] = useState<Array<{ name: string; price: string; quantity: string }>>([{ name: '', price: '', quantity: '1' }]);
+
+ const miSubtotal = miItems.reduce((s, it) => s + (Number(it.price) || 0) * (Number(it.quantity) || 0), 0);
+ const miTotal = miSubtotal + (Number(miDeliveryFee) || 0);
+ const miPaidNum = Math.min(Math.max(0, Number(miPaidAmount) || 0), miTotal);
+ const miDueNum = Math.max(0, miTotal - miPaidNum);
+
+ const resetManualInvoice = () => {
+   setMiName(''); setMiPhone(''); setMiEmail(''); setMiAddress(''); setMiCity('');
+   setMiDeliveryFee('0'); setMiPaidAmount('0'); setMiPaymentMethod('Cash on Delivery'); setMiNote('');
+   setMiItems([{ name: '', price: '', quantity: '1' }]);
+ };
+
+ const handleCreateManualInvoice = async () => {
+   const cleanItems = miItems
+     .map((it) => ({ name: it.name.trim(), price: Number(it.price) || 0, quantity: Math.max(1, Math.floor(Number(it.quantity) || 0)) }))
+     .filter((it) => it.name.length > 0);
+   if (!miName.trim()) { toast.error('Customer name is required.'); return; }
+   if (cleanItems.length === 0) { toast.error('Add at least one item with a name.'); return; }
+   setMiSaving(true);
+   try {
+     const subtotal = cleanItems.reduce((s, it) => s + it.price * it.quantity, 0);
+     const deliveryFee = Number(miDeliveryFee) || 0;
+     const total = subtotal + deliveryFee;
+     const paidAmount = Math.min(Math.max(0, Number(miPaidAmount) || 0), total);
+     const outstandingAmount = Math.max(0, total - paidAmount);
+     const paymentStatus: Order['paymentStatus'] =
+       outstandingAmount <= 0 && paidAmount > 0 ? 'Paid'
+         : paidAmount > 0 ? 'Delivery Fee Paid'
+           : 'Pending';
+     const emailLower = miEmail.trim().toLowerCase();
+     const now = new Date();
+     const storeName = siteSettings?.websiteName || 'ORD';
+     const prefix = storeName.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 4) || 'ORD';
+     const ts = now.getTime().toString(36).toUpperCase().slice(-5);
+     const rnd = Math.random().toString(36).toUpperCase().slice(2, 5);
+     const orderNumber = `${prefix}-${ts}${rnd}`;
+     const id = `order_${now.getTime()}_${Math.random().toString(36).slice(2, 8)}`;
+     let userId: string | undefined = undefined;
+     if (emailLower) { try { userId = await emailToUserId(emailLower); } catch { /* optional link to account */ } }
+     const order: Order = {
+       id,
+       orderNumber,
+       userId,
+       customerName: miName.trim(),
+       email: emailLower,
+       phone: miPhone.trim(),
+       address: miAddress.trim(),
+       city: miCity.trim(),
+       deliveryNote: miNote.trim() || undefined,
+       items: cleanItems.map((it) => ({ productId: `manual_${Math.random().toString(36).slice(2, 8)}`, name: it.name, price: it.price, quantity: it.quantity })),
+       subtotal,
+       deliveryFee,
+       couponApplied: null,
+       discount: 0,
+       total,
+       paymentMethod: miPaymentMethod.trim() || 'Manual',
+       paymentStatus,
+       orderStatus: 'Confirmed' as OrderStatus,
+       createdAt: now.toISOString(),
+       currency: (siteSettings?.currency || 'USD').toUpperCase(),
+       paidAmount,
+       outstandingAmount,
+     };
+     await dbService.saveOrder(order);
+     try {
+       const b64 = buildInvoicePdfBase64({ order, siteSettings });
+       const link = document.createElement('a');
+       link.href = `data:application/pdf;base64,${b64}`;
+       link.download = `invoice-${orderNumber}.pdf`;
+       document.body.appendChild(link);
+       link.click();
+       link.remove();
+     } catch { toast.error('Order saved, but the invoice PDF could not be generated.'); }
+     toast.success(`Manual order #${orderNumber} created & invoice downloaded.`);
+     setShowManualInvoice(false);
+     resetManualInvoice();
+   } catch {
+     toast.error('Could not create the manual order.');
+   } finally {
+     setMiSaving(false);
+   }
+ };
 
  // Route Login input
  const [usernameInput, setUsernameInput] = useState('');
@@ -2600,12 +2699,103 @@ payFastLogoImageUrl: brandPayFastLogo,
 
  {/* TAB 2: ORDERS LIST tracker */}
  {activeTab ==='orders' && (
- <div className="space-y-6"> <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"> <div> <h3 className="text-lg font-bold text-slate-800 uppercase">Incoming Client Orders List</h3> <p className="text-xs text-slate-500 font-medium">Verify reference indices, update delivery states, or print receipts.</p> </div> {orders.length > 0 && (
+ <div className="space-y-6">
+ {/* ── MANUAL INVOICE MODAL (WhatsApp / Messenger / phone orders) ── */}
+ {showManualInvoice && (
+ <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+ <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl my-8">
+ <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+ <div>
+ <h3 className="text-lg font-bold text-slate-800 uppercase">Create Manual Invoice</h3>
+ <p className="text-xs text-slate-500 font-medium">For orders received on WhatsApp, Messenger or by phone. Records the order and downloads an invoice PDF.</p>
+ </div>
+ <button onClick={() => setShowManualInvoice(false)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400 cursor-pointer"><XCircle className="w-5 h-5" /></button>
+ </div>
+ <div className="px-6 py-5 space-y-5">
+ {/* Customer */}
+ <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Customer Name *</label>
+ <input value={miName} onChange={(e) => setMiName(e.target.value)} placeholder="e.g. Rahim Uddin" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Phone</label>
+ <input value={miPhone} onChange={(e) => setMiPhone(e.target.value)} placeholder="01XXXXXXXXX" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Email (optional)</label>
+ <input value={miEmail} onChange={(e) => setMiEmail(e.target.value)} placeholder="name@email.com" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">City</label>
+ <input value={miCity} onChange={(e) => setMiCity(e.target.value)} placeholder="e.g. Dhaka" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ <div className="sm:col-span-2">
+ <label className="text-[11px] font-bold uppercase text-slate-500">Address</label>
+ <input value={miAddress} onChange={(e) => setMiAddress(e.target.value)} placeholder="Delivery address" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ </div>
+ {/* Items */}
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Items *</label>
+ <div className="mt-1 space-y-2">
+ {miItems.map((it, idx) => (
+ <div key={idx} className="flex items-center gap-2">
+ <input value={it.name} onChange={(e) => setMiItems((prev) => prev.map((p, i) => i === idx ? { ...p, name: e.target.value } : p))} placeholder="Item name" className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ <input value={it.quantity} onChange={(e) => setMiItems((prev) => prev.map((p, i) => i === idx ? { ...p, quantity: e.target.value } : p))} type="number" min="1" placeholder="Qty" className="w-16 border border-slate-200 rounded-lg px-2 py-2 text-sm text-slate-800" />
+ <input value={it.price} onChange={(e) => setMiItems((prev) => prev.map((p, i) => i === idx ? { ...p, price: e.target.value } : p))} type="number" min="0" step="0.01" placeholder="Price" className="w-24 border border-slate-200 rounded-lg px-2 py-2 text-sm text-slate-800" />
+ <button onClick={() => setMiItems((prev) => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)} className="p-2 rounded-lg hover:bg-rose-50 text-rose-400 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+ </div>
+ ))}
+ </div>
+ <button onClick={() => setMiItems((prev) => [...prev, { name: '', price: '', quantity: '1' }])} className="mt-2 flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"><Plus className="w-3.5 h-3.5" /> Add item</button>
+ </div>
+ {/* Payment */}
+ <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Delivery Fee</label>
+ <input value={miDeliveryFee} onChange={(e) => setMiDeliveryFee(e.target.value)} type="number" min="0" step="0.01" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Amount Paid</label>
+ <input value={miPaidAmount} onChange={(e) => setMiPaidAmount(e.target.value)} type="number" min="0" step="0.01" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Payment Method</label>
+ <input value={miPaymentMethod} onChange={(e) => setMiPaymentMethod(e.target.value)} placeholder="e.g. bKash, Cash" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ </div>
+ <div>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Note (optional)</label>
+ <input value={miNote} onChange={(e) => setMiNote(e.target.value)} placeholder="Any delivery note" className="mt-1 w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
+ </div>
+ {/* Live totals */}
+ <div className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm space-y-1">
+ <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{formatPrice(miSubtotal)}</span></div>
+ <div className="flex justify-between text-slate-600"><span>Delivery Fee</span><span>{formatPrice(Number(miDeliveryFee) || 0)}</span></div>
+ <div className="flex justify-between font-bold text-slate-800"><span>Grand Total</span><span>{formatPrice(miTotal)}</span></div>
+ <div className="flex justify-between text-emerald-600 font-semibold"><span>Amount Paid</span><span>{formatPrice(miPaidNum)}</span></div>
+ <div className={`flex justify-between font-bold ${miDueNum > 0 ? 'text-rose-600' : 'text-emerald-600'}`}><span>{miDueNum > 0 ? 'Amount Due' : 'Fully Paid'}</span><span>{formatPrice(miDueNum)}</span></div>
+ </div>
+ </div>
+ <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100">
+ <button onClick={() => setShowManualInvoice(false)} disabled={miSaving} className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 cursor-pointer disabled:opacity-50">Cancel</button>
+ <button onClick={handleCreateManualInvoice} disabled={miSaving} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold cursor-pointer disabled:opacity-50">{miSaving ? 'Saving…' : (<><Download className="w-4 h-4" /> Create &amp; Download Invoice</>)}</button>
+ </div>
+ </div>
+ </div>
+ )}
+ <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"> <div> <h3 className="text-lg font-bold text-slate-800 uppercase">Incoming Client Orders List</h3> <p className="text-xs text-slate-500 font-medium">Verify reference indices, update delivery states, or print receipts.</p> </div> <div className="flex items-center gap-2 flex-shrink-0"> <button
+ onClick={() => { resetManualInvoice(); setShowManualInvoice(true); }}
+ title="Create an invoice for an order received on WhatsApp / Messenger / phone"
+ className="flex items-center gap-1.5 px-3 py-2 border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer shadow-xs flex-shrink-0"
+ > <Plus className="w-3.5 h-3.5" /> Manual Invoice
+ </button> {orders.length > 0 && (
  <button
  onClick={() => exportOrdersCSV(orders)}
  className="flex items-center gap-1.5 px-3 py-2 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg text-xs font-bold uppercase transition-colors cursor-pointer shadow-xs flex-shrink-0"
  > <Download className="w-3.5 h-3.5" /> Export CSV
- </button> )}
+ </button> )} </div>
  </div> {orders.length === 0 ? (
  <div className="bg-slate-50 p-8 rounded-xl font-semibold text-center text-slate-400 border border-slate-100"> No orders placed in records database yet.
  </div> ) : (
@@ -3028,7 +3218,7 @@ payFastLogoImageUrl: brandPayFastLogo,
  onChange={(e) => setBrandName(e.target.value)}
  className="w-full bg-slate-50 border border-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-lg px-2.5 py-1.5 text-xs font-semibold outline-none transition-all"
  /> </div> <div className="md:col-span-2"> <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1.5"> Site Logo Image <span className="normal-case text-emerald-600 font-semibold">(appears in Navbar, Footer, Hero, Cart & Invoices)</span> </label> {/* Recommended size info box */}
- <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[10px] text-blue-800 leading-relaxed mb-3"> <p className="font-bold text-blue-900 uppercase mb-1"> Recommended Logo Specifications</p> <div className="grid grid-cols-2 gap-x-4 gap-y-0.5"> <p>• Ideal size: <span className="font-bold">200 × 200 px</span> (square)</p> <p>• Aspect ratio: <span className="font-bold">1:1 square</span></p> <p>• Min size: <span className="font-bold">100 × 100 px</span></p> <p>• Max file size: <span className="font-bold">2 MB</span></p> <p>• Best format: <span className="font-bold">SVG or PNG</span></p> <p>• Background: <span className="font-bold">Transparent PNG preferred</span></p> </div> <p className="mt-1.5 text-blue-700"> SVG is best — scales perfectly at any size. Transparent PNG also works great. Avoid JPG for logos (no transparency).</p> </div> <div className="flex flex-col sm:flex-row gap-3 items-start"> {/* Upload button */}
+ <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-[10px] text-blue-800 leading-relaxed mb-3"> <p className="font-bold text-blue-900 uppercase mb-1"> Recommended Logo Specifications</p> <div className="grid grid-cols-2 gap-x-4 gap-y-0.5"> <p>• Ideal size: <span className="font-bold">200 × 200 px</span> (square)</p> <p>• Aspect ratio: <span className="font-bold">1:1 square</span></p> <p>��� Min size: <span className="font-bold">100 × 100 px</span></p> <p>• Max file size: <span className="font-bold">2 MB</span></p> <p>• Best format: <span className="font-bold">SVG or PNG</span></p> <p>• Background: <span className="font-bold">Transparent PNG preferred</span></p> </div> <p className="mt-1.5 text-blue-700"> SVG is best — scales perfectly at any size. Transparent PNG also works great. Avoid JPG for logos (no transparency).</p> </div> <div className="flex flex-col sm:flex-row gap-3 items-start"> {/* Upload button */}
  <div className="flex-1 space-y-2"> <label className="flex items-center gap-2 w-fit px-3 py-2 bg-white border border-dashed border-emerald-400 hover:bg-emerald-50 rounded-xl cursor-pointer transition-colors group"> <span className="text-emerald-600 text-lg"></span> <span className="text-xs font-semibold text-emerald-700 group-hover:text-emerald-800">Upload Logo File</span> <input
  type="file"
  accept="image/jpeg,image/png,image/webp,image/svg+xml,image/gif"

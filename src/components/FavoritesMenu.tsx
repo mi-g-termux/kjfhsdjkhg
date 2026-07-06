@@ -330,9 +330,9 @@ export const FavoritesMenu = ({
                   {/* Title and Description */}
                   <div className="flex-1 mb-4">
                     <h3
-                      className="text-sm font-bold font-sans text-slate-800 line-clamp-2 uppercase cursor-pointer hover:text-emerald-700 transition-colors"
+                      className="text-sm font-bold font-sans text-slate-800 line-clamp-2 min-h-[2.5rem] leading-tight uppercase cursor-pointer hover:text-emerald-700 transition-colors break-words"
                       onClick={() => navigateToProduct(prod)}
-                      title={`View ${prod.name}`}
+                      title={prod.name}
                     >{prod.name}</h3>
                     <p className="text-xs text-slate-500 font-normal line-clamp-3 mt-1 leading-snug">
                       {prod.description}

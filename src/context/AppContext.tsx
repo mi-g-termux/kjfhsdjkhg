@@ -1207,8 +1207,14 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         return { success: true, message: `Welcome back, ${merged.name}! 👋` };
       }
 
+      // DUPLICATE-ACCOUNT FIX: derive the id from the email (same as registerUser
+      // and ensureUserAfterCheckout) instead of the raw Google UID. Because the
+      // users table is keyed by this id, EVERY account-creation path for a given
+      // email now collapses onto the SAME row (upsert onConflict:'id') — so a
+      // guest checkout after a Google/normal signup can never create a second
+      // account with the same email. googleId is no longer used for identity.
       const newProfile: UserProfile = {
-        id: googleId,
+        id: await emailToUserId(email),
         name,
         email,
         phone: '',
@@ -1217,6 +1223,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         passwordHash: '',
         orderIds: [],
       };
+      void googleId;
       try { await saveUserAccount(newProfile); } catch { /* non-fatal — local cache still works */ }
       saveUserProfile(newProfile);
       setCurrentUserSession(email);
@@ -2801,7 +2808,7 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
     [switchDatabaseEngine],
   );
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ─────────���───────────────────────────────────────────────────────────────
   //  C1 + C2: ADMIN SESSION WITH FIREBASE AUTH
   // ─────────────────────────────────────────────────────────────────────────
 

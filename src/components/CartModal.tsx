@@ -921,7 +921,18 @@ export const CartModal = ({ isOpen, onClose, emailVerified = true }: CartModalPr
       }
 
       // Charge only the delivery-fee advance now; the rest stays COD.
-      const feeAmount = partialAdvance.toFixed(2);
+      // CURRENCY FIX: convert the advance from the STORE currency into the chosen
+      // gateway's NATIVE currency (e.g. a USD store paying via SSLCommerz/bKash/
+      // Nagad must charge in BDT, Razorpay/Paytm/UPI in INR, JazzCash/Easypaisa
+      // in PKR, PayFast in ZAR). Stripe & PayPal convert server-side, so
+      // convertForPaymentMethod returns the amount unchanged for them. Without
+      // this, a $150 advance was being sent as "150" in the gateway's native
+      // currency (e.g. 150 BDT instead of ~16,500 BDT). The MAIN checkout already
+      // did this conversion — the partial-COD path was the only one missing it.
+      const feeStoreCurrency = (siteSettings?.currency || 'USD').toUpperCase();
+      const { convertedAmount: feeConverted, nativeCurrency: feeCurrency } =
+        await convertForPaymentMethod(partialAdvance, feeStoreCurrency, activeGateway);
+      const feeAmount = feeConverted.toFixed(2);
       const feeOrderId = `${makeOrderId(siteSettings?.websiteName, 'DF')}`;
       // Persist the pending fee-paid order (+ email) tagged with the gateway
       // label, then let the EXISTING gateway return handlers finish it via
@@ -1004,7 +1015,7 @@ export const CartModal = ({ isOpen, onClose, emailVerified = true }: CartModalPr
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             amount: feeAmount,
-            currency: (siteSettings?.currency || 'USD').toLowerCase(),
+            currency: feeCurrency.toLowerCase(),
             orderId: feeOrderId,
             sandboxMode: paymentSettings.stripeSandboxMode ?? true,
             productName: `${siteSettings?.storeName || 'Order'} — Delivery Fee`,
@@ -1030,7 +1041,7 @@ export const CartModal = ({ isOpen, onClose, emailVerified = true }: CartModalPr
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             amount: feeAmount,
-            currency: (siteSettings?.currency || 'USD').toUpperCase(),
+            currency: feeCurrency.toUpperCase(),
             sandboxMode: paymentSettings.paypalSandboxMode ?? true,
             paypalClientId:     paymentSettings.paypalClientId     || '',
             paypalClientSecret: paymentSettings.paypalClientSecret || '',
@@ -1079,7 +1090,7 @@ export const CartModal = ({ isOpen, onClose, emailVerified = true }: CartModalPr
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             amount: feeAmount,
-            currency: siteSettings?.currency || 'INR',
+            currency: feeCurrency || 'INR',
             orderId: feeOrderId,
             sandboxMode: paymentSettings.razorpaySandboxMode ?? false,
             razorpayKeyId: paymentSettings.razorpayKeyId || '',
@@ -2053,7 +2064,7 @@ export const CartModal = ({ isOpen, onClose, emailVerified = true }: CartModalPr
         return;
       }
 
-      // ─����������� Razorpay ─────────────────────────────────────────────────────────
+      // ─������������� Razorpay ─────────────────────────────────────────────────────────
       if (methodLabel.startsWith('Razorpay')) {
         setAutoStep(3);
         const rzpRes = await fetch('/api/razorpay/create-order', {
