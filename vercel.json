@@ -7,9 +7,9 @@
     { "source": "/api/bkash/:action",           "destination": "/api/payment?gateway=bkash&action=:action" },
     { "source": "/api/nagad/:action",           "destination": "/api/payment?gateway=nagad&action=:action" },
     { "source": "/api/sslcommerz/:action",      "destination": "/api/payment?gateway=sslcommerz&action=:action" },
-    { "source": "/api/stripe/webhook",          "destination": "/api/webhooks/stripe" },
-    { "source": "/api/paypal/webhook",          "destination": "/api/webhooks/paypal" },
-    { "source": "/api/razorpay/webhook",        "destination": "/api/webhooks/razorpay" },
+    { "source": "/api/stripe/webhook",          "destination": "/api/webhook?gateway=stripe" },
+    { "source": "/api/paypal/webhook",          "destination": "/api/webhook?gateway=paypal" },
+    { "source": "/api/razorpay/webhook",        "destination": "/api/webhook?gateway=razorpay" },
     { "source": "/api/razorpay/:action",        "destination": "/api/payment?gateway=razorpay&action=:action" },
     { "source": "/api/paypal/:action",          "destination": "/api/payment?gateway=paypal&action=:action" },
     { "source": "/api/stripe/:action",          "destination": "/api/payment?gateway=stripe&action=:action" },
@@ -44,9 +44,7 @@
   ],
   "functions": {
     "api/payment.ts":    { "maxDuration": 30 },
-    "api/webhooks/stripe.ts":   { "maxDuration": 30 },
-    "api/webhooks/paypal.ts":   { "maxDuration": 30 },
-    "api/webhooks/razorpay.ts": { "maxDuration": 30 },
+    "api/webhook.ts":    { "maxDuration": 30 },
     "api/send-email.ts": { "maxDuration": 30 },
     "api/verify-smtp.ts":{ "maxDuration": 30 },
     "api/send-sms.ts":   { "maxDuration": 30 }
