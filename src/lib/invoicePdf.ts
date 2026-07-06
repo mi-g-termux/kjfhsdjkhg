@@ -183,7 +183,7 @@ export function buildInvoicePdfBase64(options: BuildInvoiceOptions): string {
 
   // Totals
   y += 14;
-  const totalsX = pageW - margin - 200;
+  const totalsX = pageW - margin - 240;
 
   const writeRow = (label: string, value: string, opts?: { bold?: boolean; color?: [number, number, number] }) => {
     doc.setFont('helvetica', opts?.bold ? 'bold' : 'normal');
@@ -215,81 +215,87 @@ export function buildInvoicePdfBase64(options: BuildInvoiceOptions): string {
   writeRow('GRAND TOTAL', fmt(order.total), { bold: true });
   doc.setLineWidth(0.2);
 
-  // ── PAYMENT SUMMARY ─────────────────────────────────────────────────────────
-  // Always show the payment METHOD, a clear PAID / PARTIALLY PAID / UNPAID
-  // status, and Amount Paid vs Amount Due, so anyone reading the invoice knows
-  // instantly whether (and how) the order was paid. Handles fully-prepaid
-  // orders, partial-COD (advance paid online), and plain cash-on-delivery.
+  // ── PAYMENT SUMMARY (card) ───────────────────────────────────────────────────
+  // A compact, right-aligned summary card. The payment method, a colored status
+  // pill (PAID / PARTIALLY PAID / UNPAID), and the paid vs due amounts each sit
+  // on their own clean row, so nothing ever overlaps no matter how long the text.
   {
     const grand = Number(order.total) || 0;
     const hasPartial =
       order.paidAmount !== undefined && order.outstandingAmount !== undefined;
     const isFullyPaid = order.paymentStatus === 'Paid';
-    const paid = hasPartial
-      ? Number(order.paidAmount) || 0
-      : isFullyPaid
-        ? grand
-        : 0;
-    const due = hasPartial
-      ? Number(order.outstandingAmount) || 0
-      : Math.max(0, grand - paid);
+    const paid = hasPartial ? Number(order.paidAmount) || 0 : isFullyPaid ? grand : 0;
+    const due = hasPartial ? Number(order.outstandingAmount) || 0 : Math.max(0, grand - paid);
 
-    const statusLabel =
-      due <= 0 && paid > 0
-        ? 'PAID'
-        : paid > 0
-          ? 'PARTIALLY PAID'
-          : 'UNPAID (Cash on Delivery)';
+    const statusLabel = due <= 0 && paid > 0 ? 'PAID' : paid > 0 ? 'PARTIALLY PAID' : 'UNPAID';
     const statusColor: [number, number, number] =
       due <= 0 && paid > 0 ? [16, 185, 129] : paid > 0 ? [217, 119, 6] : [220, 38, 38];
+    const dueColor: [number, number, number] = due > 0 ? [220, 38, 38] : [16, 185, 129];
 
-    y += 10;
-    doc.setDrawColor(16, 185, 129);
-    doc.setLineWidth(0.8);
-    doc.line(totalsX, y, pageW - margin - 10, y);
-    y += 16;
+    const cardX = totalsX - 14;
+    const cardW = pageW - margin - cardX;
+    const cardY = y + 8;
+    const rowH = 22;
+    const cardH = 16 + rowH * 4 + 4;
+    const labelX = cardX + 14;
+    const valX = pageW - margin - 12;
+
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setLineWidth(0.6);
+    doc.roundedRect(cardX, cardY, cardW, cardH, 8, 8, 'FD');
     doc.setLineWidth(0.2);
+
+    let py = cardY + 26;
 
     // Payment method
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
     doc.setTextColor(100, 116, 139);
-    doc.text('Payment Method', totalsX, y);
+    doc.text('Payment Method', labelX, py);
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
-    const methodLines = doc.splitTextToSize(order.paymentMethod || '-', 150);
-    doc.text(methodLines[0] || '-', pageW - margin - 10, y, { align: 'right' });
-    y += 18;
+    const method = (order.paymentMethod || '-').toString();
+    const methodFit = method.length > 22 ? method.slice(0, 21) + '...' : method;
+    doc.text(methodFit, valX, py, { align: 'right' });
+    py += rowH;
 
-    // Payment status
+    // Payment status — colored pill
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Payment Status', labelX, py);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    const pillW = doc.getTextWidth(statusLabel) + 16;
+    const pillH = 15;
+    const pillX = valX - pillW;
+    const pillY = py - 11;
+    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+    doc.roundedRect(pillX, pillY, pillW, pillH, 7, 7, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.text(statusLabel, pillX + pillW / 2, py, { align: 'center' });
+    py += rowH;
+
+    // Amount paid
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text('Amount Paid', labelX, py);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(16, 185, 129);
+    doc.text(fmt(paid), valX, py, { align: 'right' });
+    py += rowH;
+
+    // Amount due
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text('Payment Status', totalsX, y);
+    doc.text('Amount Due', labelX, py);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(statusColor[0], statusColor[1], statusColor[2]);
-    doc.text(statusLabel, pageW - margin - 10, y, { align: 'right' });
-    y += 18;
+    doc.setTextColor(dueColor[0], dueColor[1], dueColor[2]);
+    doc.text(fmt(due), valX, py, { align: 'right' });
 
-    // Amount paid (green)
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(16, 185, 129);
-    doc.text('Amount Paid', totalsX, y);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(16, 185, 129);
-    doc.text(fmt(paid), pageW - margin - 10, y, { align: 'right' });
-    y += 18;
-
-    // Amount due (red when > 0, otherwise neutral/green)
-    const dueR = due > 0 ? 220 : 16;
-    const dueG = due > 0 ? 38 : 185;
-    const dueB = due > 0 ? 38 : 129;
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(dueR, dueG, dueB);
-    doc.text(due > 0 ? 'Amount Due on Delivery' : 'Amount Due', totalsX, y);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(dueR, dueG, dueB);
-    doc.text(fmt(due), pageW - margin - 10, y, { align: 'right' });
-    y += 18;
-    doc.setLineWidth(0.2);
+    y = cardY + cardH + 12;
   }
 
   // Footer

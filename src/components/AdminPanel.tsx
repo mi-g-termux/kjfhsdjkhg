@@ -2737,14 +2737,33 @@ payFastLogoImageUrl: brandPayFastLogo,
  </div>
  {/* Items */}
  <div>
- <label className="text-[11px] font-bold uppercase text-slate-500">Items *</label>
+ <label className="text-[11px] font-bold uppercase text-slate-500">Items * <span className="text-slate-400 font-medium normal-case">— pick from your store or type a custom item</span></label>
  <div className="mt-1 space-y-2">
  {miItems.map((it, idx) => (
- <div key={idx} className="flex items-center gap-2">
- <input value={it.name} onChange={(e) => setMiItems((prev) => prev.map((p, i) => i === idx ? { ...p, name: e.target.value } : p))} placeholder="Item name" className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800" />
- <input value={it.quantity} onChange={(e) => setMiItems((prev) => prev.map((p, i) => i === idx ? { ...p, quantity: e.target.value } : p))} type="number" min="1" placeholder="Qty" className="w-16 border border-slate-200 rounded-lg px-2 py-2 text-sm text-slate-800" />
- <input value={it.price} onChange={(e) => setMiItems((prev) => prev.map((p, i) => i === idx ? { ...p, price: e.target.value } : p))} type="number" min="0" step="0.01" placeholder="Price" className="w-24 border border-slate-200 rounded-lg px-2 py-2 text-sm text-slate-800" />
- <button onClick={() => setMiItems((prev) => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)} className="p-2 rounded-lg hover:bg-rose-50 text-rose-400 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
+ <div key={idx} className="border border-slate-200 rounded-xl p-2.5 space-y-2 bg-slate-50">
+ <div className="flex items-center gap-2">
+ <select
+ value=""
+ onChange={(e) => {
+ const prod = products.find((pr) => pr.id === e.target.value);
+ if (!prod) return;
+ const unit = prod.salePrice != null ? prod.salePrice : prod.price;
+ setMiItems((prev) => prev.map((row, i) => i === idx ? { ...row, name: prod.name, price: String(unit) } : row));
+ }}
+ className="flex-1 border border-slate-200 rounded-lg px-2 py-2 text-sm text-slate-700 bg-white cursor-pointer"
+ >
+ <option value="">＋ Pick a product from your store…</option>
+ {products.map((pr) => (
+ <option key={pr.id} value={pr.id}>{pr.name} — {formatPrice(pr.salePrice != null ? pr.salePrice : pr.price)}</option>
+ ))}
+ </select>
+ <button onClick={() => setMiItems((prev) => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)} title="Remove item" className="p-2 rounded-lg hover:bg-rose-50 text-rose-400 cursor-pointer flex-shrink-0"><Trash2 className="w-4 h-4" /></button>
+ </div>
+ <div className="flex items-center gap-2">
+ <input value={it.name} onChange={(e) => setMiItems((prev) => prev.map((row, i) => i === idx ? { ...row, name: e.target.value } : row))} placeholder="Item name" className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 bg-white" />
+ <input value={it.quantity} onChange={(e) => setMiItems((prev) => prev.map((row, i) => i === idx ? { ...row, quantity: e.target.value } : row))} type="number" min="1" placeholder="Qty" className="w-16 border border-slate-200 rounded-lg px-2 py-2 text-sm text-slate-800 bg-white" />
+ <input value={it.price} onChange={(e) => setMiItems((prev) => prev.map((row, i) => i === idx ? { ...row, price: e.target.value } : row))} type="number" min="0" step="0.01" placeholder="Price" className="w-24 border border-slate-200 rounded-lg px-2 py-2 text-sm text-slate-800 bg-white" />
+ </div>
  </div>
  ))}
  </div>
